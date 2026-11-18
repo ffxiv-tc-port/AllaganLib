@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using AllaganLib.GameSheets.Model;
 using Lumina;
 using Lumina.Data.Files;
@@ -100,6 +101,9 @@ public class NpcLevelCache
     {
         var npcLevelLookup = new Dictionary<uint, HashSet<NpcLocation>>();
 
+        // 有固定 Map 的區域：同一個 lgb＋同 Map＋同 PlaceName 產生的 NpcLocation 全部等於先前那次（Equals 不看 TerritoryType），
+        // 加進 HashSet 都是空操作，故整份略過；Map 為 0 的區域地圖依區域而定，照舊逐份處理。
+        var processedLgbs = new HashSet<(string Path, uint Map, uint PlaceName)>();
         foreach (var sTerritoryType in this.territoryTypeSheet)
         {
             var bg = sTerritoryType.Bg.ToString();
@@ -109,7 +113,14 @@ public class NpcLevelCache
             }
 
 
-            var sLgbFile = this.gameData.GetFile<LgbFile>("bg/" + bg.Substring(0, bg.IndexOf("/level/", StringComparison.Ordinal) + 1) + $"level/planevent.lgb");
+            var lgbPath = "bg/" + bg.Substring(0, bg.IndexOf("/level/", StringComparison.Ordinal) + 1) + $"level/planevent.lgb";
+            var lgbKey = (lgbPath, sTerritoryType.Map.RowId, sTerritoryType.PlaceName.RowId);
+            if (sTerritoryType.Map.RowId != 0 && processedLgbs.Contains(lgbKey))
+            {
+                continue;
+            }
+
+            var sLgbFile = this.gameData.GetFile<LgbFile>(lgbPath);
             if (sLgbFile == null)
             {
                 continue;
@@ -159,6 +170,11 @@ public class NpcLevelCache
                     }
                 }
             }
+
+            if (sTerritoryType.Map.RowId != 0)
+            {
+                processedLgbs.Add(lgbKey);
+            }
         }
 
         foreach (var level in this.levelSheet
@@ -171,10 +187,15 @@ public class NpcLevelCache
                 level.Map.Value.PlaceName,
                 new RowRef<TerritoryType>(this.gameData.Excel, level.Territory.RowId));
 
-            npcLevelLookup.TryAdd(level.Object.RowId, new HashSet<NpcLocation>());
-            if (!npcLevelLookup[level.Object.RowId].Any(c => c.EqualRounded(npcLocation)))
+            ref var levelLocations = ref CollectionsMarshal.GetValueRefOrAddDefault(npcLevelLookup, level.Object.RowId, out var exists);
+            if (!exists)
             {
-                npcLevelLookup[level.Object.RowId].Add(npcLocation);
+                levelLocations = new HashSet<NpcLocation>();
+            }
+
+            if (!ContainsRounded(levelLocations!, npcLocation))
+            {
+                levelLocations!.Add(npcLocation);
             }
         }
 
@@ -194,7 +215,7 @@ public class NpcLevelCache
                     npc.TerritoryType.Value.PlaceName,
                     npc.TerritoryType,
                     true);
-                if (!npcLevelLookup[npc.ENpcResidentId].Any(c => c.EqualRounded(npcLocation)))
+                if (!ContainsRounded(npcLevelLookup[npc.ENpcResidentId], npcLocation))
                 {
                     npcLevelLookup[npc.ENpcResidentId].Add(npcLocation);
                 }
@@ -204,5 +225,19 @@ public class NpcLevelCache
         this.locations = npcLevelLookup;
 
         return npcLevelLookup;
+    }
+
+    // 等同 locations.Any(c => c.EqualRounded(location))（同樣的列舉順序與短路），不配置委派與列舉器。
+    private static bool ContainsRounded(HashSet<NpcLocation> locations, NpcLocation location)
+    {
+        foreach (var existing in locations)
+        {
+            if (existing.EqualRounded(location))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
