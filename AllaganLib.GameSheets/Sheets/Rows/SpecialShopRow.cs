@@ -19,9 +19,9 @@ public class SpecialShopRow : ExtendedRow<SpecialShop, SpecialShopRow, SpecialSh
 
     public string Name => this.ToString();
 
-    public IEnumerable<IShopListing> ShopListings => this.shopListings ??= this.BuildShopItems().ShopListings;
+    public IEnumerable<IShopListing> ShopListings => this.shopListings ??= this.BuildShopItems(false).ShopListings;
 
-    public IEnumerable<SpecialShopListing> SpecialShopListings => this.specialShopListings ??= this.BuildShopItems().ShopListings;
+    public IEnumerable<SpecialShopListing> SpecialShopListings => this.specialShopListings ??= this.BuildShopItems(false).ShopListings;
 
     public HashSet<uint> MapIds => this.mapIds ??= this.ENpcs.SelectMany(c => c.Locations.Select(d => d.Map.RowId)).Distinct().ToHashSet();
 
@@ -48,9 +48,9 @@ public class SpecialShopRow : ExtendedRow<SpecialShop, SpecialShopRow, SpecialSh
         }
     }
 
-    public IEnumerable<ItemRow> Items => this.rewards ??= this.BuildShopItems().Rewards;
+    public IEnumerable<ItemRow> Items => this.rewards ??= this.BuildShopItems(true).Rewards;
 
-    public IEnumerable<ItemRow> CostItems => this.costs ??= this.BuildShopItems().Costs;
+    public IEnumerable<ItemRow> CostItems => this.costs ??= this.BuildShopItems(true).Costs;
 
     public FateShopRow? FateShop => this.GetFateShopAdjustedRowId() == null ? null : this.fateShopRow ??= this.Sheet.GetFateShopSheet().GetRow(this.GetFateShopAdjustedRowId()!.Value);
 
@@ -107,22 +107,55 @@ public class SpecialShopRow : ExtendedRow<SpecialShop, SpecialShopRow, SpecialSh
         return this.name;
     }
 
-    private (SpecialShopListing[] ShopListings, List<ItemRow> Rewards, List<ItemRow> Costs) BuildShopItems()
+    // collectItems=false 時只建 ShopListings（Rewards／Costs 回空清單）；listing 與其 GetRow 照常建立，只省下沒人讀的兩份物品清單。
+    private (SpecialShopListing[] ShopListings, List<ItemRow> Rewards, List<ItemRow> Costs) BuildShopItems(bool collectItems)
     {
         var shopListingsLookup = new List<SpecialShopListing>();
         var rewardItemsLookup = new List<ItemRow>();
         var costItemsLookup = new List<ItemRow>();
+        var itemSheet = this.Sheet.GetItemSheet();
+        var tomestoneLookup = this.Sheet.TomestoneLookup;
         foreach (var item in this.Base.Item)
         {
-            var specialShopListing = new SpecialShopListing(this, this.Sheet.GetItemSheet(), this.Sheet.TomestoneLookup, item);
+            if (IsEmptySlot(item))
+            {
+                continue;
+            }
+
+            var specialShopListing = new SpecialShopListing(this, itemSheet, tomestoneLookup, item);
             if (specialShopListing.Rewards.Any())
             {
                 shopListingsLookup.Add(specialShopListing);
-                rewardItemsLookup.AddRange(specialShopListing.Rewards.Select(listing => listing.Item));
-                costItemsLookup.AddRange(specialShopListing.Costs.Select(listing => listing.Item));
+                if (collectItems)
+                {
+                    rewardItemsLookup.AddRange(specialShopListing.Rewards.Select(listing => listing.Item));
+                    costItemsLookup.AddRange(specialShopListing.Costs.Select(listing => listing.Item));
+                }
             }
         }
 
         return (shopListingsLookup.ToArray(), rewardItemsLookup, costItemsLookup);
+    }
+
+    // 獎勵與花費全為 0 的格子建出來的 SpecialShopListing 沒有 Rewards、本來就不收；略過它不會少呼叫任何 GetRow。
+    private static bool IsEmptySlot(SpecialShop.ItemStruct item)
+    {
+        foreach (var receiveItem in item.ReceiveItems)
+        {
+            if (receiveItem.Item.RowId != 0)
+            {
+                return false;
+            }
+        }
+
+        foreach (var costItem in item.ItemCosts)
+        {
+            if (costItem.ItemCost.RowId != 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
