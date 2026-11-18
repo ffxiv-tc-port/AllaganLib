@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using AllaganLib.GameSheets.Extensions;
 using AllaganLib.GameSheets.ItemSources;
 using AllaganLib.GameSheets.Model;
@@ -1853,36 +1854,56 @@ public class ItemInfoCache
         }
     }
 
+    // Add* 只在缺鍵時才建內層集合（TryAdd(key, new()) 每次呼叫都先配置一個、鍵已存在就丟掉）；
+    // 鍵插入的時機與原本相同，列舉順序不變。
     public void AddItemSource(ItemSource itemSource)
     {
-        this.itemSources.TryAdd(itemSource.Item.RowId, []);
-        this.itemSources[itemSource.Item.RowId].Add(itemSource);
+        ref var list = ref CollectionsMarshal.GetValueRefOrAddDefault(this.itemSources, itemSource.Item.RowId, out var exists);
+        if (!exists)
+        {
+            list = new List<ItemSource>();
+        }
+
+        list!.Add(itemSource);
     }
 
     public void AddShopNpcLookup(IShop shop, uint npcId)
     {
-        this.eNpcIdToIShopLookup.TryAdd(npcId, []);
-        this.eNpcIdToIShopLookup[npcId].Add(shop);
+        ref var list = ref CollectionsMarshal.GetValueRefOrAddDefault(this.eNpcIdToIShopLookup, npcId, out var exists);
+        if (!exists)
+        {
+            list = new List<IShop>();
+        }
+
+        list!.Add(shop);
     }
 
     public void AddItemUse(ItemSource itemSource)
     {
-        this.itemUses.TryAdd(itemSource.CostItem?.RowId ?? itemSource.Item.RowId, []);
-        this.itemUses[itemSource.CostItem?.RowId ?? itemSource.Item.RowId].Add(itemSource);
+        ref var list = ref CollectionsMarshal.GetValueRefOrAddDefault(this.itemUses, itemSource.CostItem?.RowId ?? itemSource.Item.RowId, out var exists);
+        if (!exists)
+        {
+            list = new List<ItemSource>();
+        }
+
+        list!.Add(itemSource);
     }
 
     public void AddItemSourceUseCombo(ItemSource source, ItemSource use)
     {
         var tuple = (source.Item.RowId, use.CostItem?.RowId ?? use.Item.RowId);
-        this.itemSourceUseMap.TryAdd(tuple, []);
-        this.itemSourceUseMap[tuple].Add(source);
+        ref var list = ref CollectionsMarshal.GetValueRefOrAddDefault(this.itemSourceUseMap, tuple, out var exists);
+        if (!exists)
+        {
+            list = new List<ItemSource>();
+        }
+
+        list!.Add(source);
     }
 
     public void AddItemSourceMapLocation(uint itemId, uint mapId, ItemInfoType itemInfoType)
     {
-        this.itemSourceMapLocations.TryAdd(itemId, []);
-        this.itemSourceMapLocations[itemId].TryAdd(itemInfoType, new());
-        this.itemSourceMapLocations[itemId][itemInfoType].Add(mapId);
+        AddMapLocation(this.itemSourceMapLocations, itemId, mapId, itemInfoType);
     }
 
     public void AddItemSourceMapLocation(uint itemId, HashSet<uint> mapIds, ItemInfoType itemInfoType)
@@ -1895,9 +1916,24 @@ public class ItemInfoCache
 
     public void AddItemUseMapLocation(uint itemId, uint mapId, ItemInfoType itemInfoType)
     {
-        this.itemUseMapLocations.TryAdd(itemId, []);
-        this.itemUseMapLocations[itemId].TryAdd(itemInfoType, new());
-        this.itemUseMapLocations[itemId][itemInfoType].Add(mapId);
+        AddMapLocation(this.itemUseMapLocations, itemId, mapId, itemInfoType);
+    }
+
+    private static void AddMapLocation(Dictionary<uint, Dictionary<ItemInfoType, HashSet<uint>>> map, uint itemId, uint mapId, ItemInfoType itemInfoType)
+    {
+        ref var byType = ref CollectionsMarshal.GetValueRefOrAddDefault(map, itemId, out var exists);
+        if (!exists)
+        {
+            byType = new Dictionary<ItemInfoType, HashSet<uint>>();
+        }
+
+        ref var mapIds = ref CollectionsMarshal.GetValueRefOrAddDefault(byType!, itemInfoType, out exists);
+        if (!exists)
+        {
+            mapIds = new HashSet<uint>();
+        }
+
+        mapIds!.Add(mapId);
     }
 
     public void AddItemUseMapLocation(uint itemId, HashSet<uint> mapIds, ItemInfoType itemInfoType)
