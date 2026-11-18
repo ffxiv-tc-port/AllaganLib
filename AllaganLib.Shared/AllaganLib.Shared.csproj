@@ -10,6 +10,8 @@
         <RepositoryUrl>https://github.com/Critical-Impact/AllaganLib</RepositoryUrl>
         <Authors>Critical-Impact</Authors>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!-- 插件包不另帶 .pdb（與 Dalamud.NET.Sdk 專案一致）；堆疊仍有行號。 -->
+        <DebugType>embedded</DebugType>
     </PropertyGroup>
 
     <PropertyGroup>
