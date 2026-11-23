@@ -12,7 +12,9 @@ public class SpecialShopListing : IShopListing
 
     private static Dictionary<uint, uint> currencies = new Dictionary<uint, uint>()
     {
-        { 1, 10309 },
+        // 代號 1 是詩學神典石（不是已停用的巧手紅票 10309）：同一件改良型裝備在
+        // UseCurrencyType 4 的詩學商店與 16 的商店同價（4 走神典石表，結果相同）。
+        { 1, 28 },
         { 2, 33913 }, // Unlimited Crafters{  scrip
         { 3, 10311 },
         { 4, 33914 }, // Unlimited Gatherers{  scrip
