@@ -30,7 +30,8 @@ public class GCScripShopItemRow : ExtendedSubrow<GCScripShopItem, GCScripShopIte
 
     public ItemRow Item => this.item ??= this.Sheet.GetItemSheet().GetRow(this.Base.Item.RowId);
 
-    public uint Count => this.Base.CostGCSeals;
+    // GCScripShopItem 沒有數量欄，每次購買固定 1 個；軍票價在 Costs。
+    public uint Count => 1;
 
     public bool? IsHq => null;
 
